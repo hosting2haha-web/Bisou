@@ -51,9 +51,7 @@ if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
 LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "1559214858048766022"))
 
 # Hardcoded whitelisted users (these users are immune to all security features)
-WHITELISTED_USERS: Set[int] = {
-    1394753272492851322,  # User 1
-    133844298306172120, 
+WHITELISTED_USERS: Set[int] = { # User 
     1524254377001357332   # User 2
 }
 
