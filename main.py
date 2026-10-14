@@ -9,7 +9,6 @@ import discord
 from discord.ext import tasks
 import traceback
 import re
-from urllib.parse import urlparse
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -71,11 +70,6 @@ RATE_LIMITS = {
     'emoji_delete': {'limit': 5, 'window': 5},
     'join_spam': {'limit': 3, 'window': 10},
 }
-
-# --- ANTI-LINK CONFIGURATION ---
-ALLOWED_DOMAINS = set(os.getenv("ALLOWED_DOMAINS", "").split(',')) if os.getenv("ALLOWED_DOMAINS") else set()
-BLOCKED_DOMAINS = set(os.getenv("BLOCKED_DOMAINS", "").split(',')) if os.getenv("BLOCKED_DOMAINS") else set()
-ANTI_LINK_ENABLED = os.getenv("ANTI_LINK_ENABLED", "true").lower() == "true"
 
 # --- INTENTS ---
 intents = discord.Intents.default()
@@ -196,48 +190,6 @@ async def clean_trackers():
             tracker[user_id] = [t for t in tracker[user_id] if now - t <= 300]
             if not tracker[user_id]:
                 del tracker[user_id]
-
-def extract_links(text: str) -> List[str]:
-    """Extract URLs from text."""
-    url_pattern = re.compile(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+[^\s]*')
-    return url_pattern.findall(text)
-
-def is_allowed_link(url: str) -> bool:
-    """Check if a URL is allowed (blocks all Discord invites except discord.gg/bisou)."""
-    if not ANTI_LINK_ENABLED:
-        return True
-    
-    url_lower = url.lower()
-    
-    if any(domain in url_lower for domain in ["discord.gg/", "discord.com/invite/", "discordapp.com/invite/"]):
-        if "discord.gg/bisou" in url_lower or "discord.com/invite/bisou" in url_lower or "discordapp.com/invite/bisou" in url_lower:
-            return True
-        return False
-    
-    if not ALLOWED_DOMAINS and not BLOCKED_DOMAINS:
-        return True
-    
-    try:
-        parsed = urlparse(url)
-        domain = parsed.netloc.lower()
-        
-        if domain.startswith('www.'):
-            domain = domain[4:]
-        
-        if BLOCKED_DOMAINS:
-            for blocked in BLOCKED_DOMAINS:
-                if blocked.lower() in domain or domain == blocked.lower():
-                    return False
-        
-        if ALLOWED_DOMAINS:
-            for allowed in ALLOWED_DOMAINS:
-                if allowed.lower() in domain or domain == allowed.lower():
-                    return True
-            return False
-        
-        return True
-    except Exception:
-        return True
 
 # --- BOT EVENTS ---
 
@@ -551,7 +503,7 @@ async def on_audit_log_entry_create(entry: discord.AuditLogEntry):
 
 @bot.event
 async def on_message(message: discord.Message):
-    """Handle messages with spam detection and anti-link filtering."""
+    """Handle messages with spam detection."""
     try:
         if message.author.bot or message.guild is None:
             return
@@ -560,21 +512,6 @@ async def on_message(message: discord.Message):
             return
         
         uid = message.author.id
-        
-        # ANTI-LINK FILTERING
-        if ANTI_LINK_ENABLED:
-            links = extract_links(message.content)
-            if links:
-                blocked_links = [url for url in links if not is_allowed_link(url)]
-                if blocked_links:
-                    try:
-                        await message.delete()
-                        await message.author.timeout(datetime.timedelta(minutes=1), reason="Blocked link posted")
-                        await message.channel.send(f"{message.author.mention} No blocked links allowed.", delete_after=5)
-                        await send_mod_log(message.guild, "Blocked Link Filter", message.author, message.channel.mention, "Blocked link removed.", color=0xFFA500)
-                    except discord.Forbidden:
-                        pass
-                    return
         
         # POLL SPAM
         if getattr(message, "poll", None):
@@ -639,3 +576,4 @@ if __name__ == "__main__":
         bot.run(BOT_TOKEN)
     except Exception as e:
         logger.critical(f"Failed to start bot: {e}\n{traceback.format_exc()}")
+
